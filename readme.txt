@@ -1,0 +1,9 @@
+Credits
+Icon: http://opengameart.org/content/play-pause-mute-and-unmute-buttons
+Banner: http://opengameart.org/content/pd-glossy-icon-buttons
+
+Play & Repeat icons: by Søren Nielsen licensed under CC-BY 3.0
+http://opengameart.org/content/grayscale-icons 
+http://creativecommons.org/licenses/by/3.0/
+
+Battery icon: http://opengameart.org/content/battery-power-icon
