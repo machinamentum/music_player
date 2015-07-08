@@ -551,7 +551,7 @@ int main()
             } else {
                while (audiobuf_index < Samples * 2) {
                   n = FLAC__stream_decoder_process_single(FLAC_decoder);
-                  if (!n) break;
+                  if (FLAC__stream_decoder_get_state(FLAC_decoder) == FLAC__STREAM_DECODER_END_OF_STREAM) break;
                }
                audiobuf_index = 0;
             }
