@@ -21,6 +21,8 @@
 #include "loop_disable_png.h"
 #include "power_png.h"
 
+#include <FLAC/stream_decoder.h>
+
 stb_vorbis *v = NULL;
 
 enum {
@@ -36,6 +38,7 @@ bool draw_ui = true;
 int error;
 s16 *audiobuf = NULL;
 stb_vorbis_info info;
+FLAC__StreamDecoder *FLAC_decoder = NULL;
 u32 Samples;
 u32 audiobuf_size;
 bool loop_flag = false;
@@ -45,6 +48,12 @@ u8 is_charging = 0;
 
 std::string currently_playing;
 
+enum {
+   AUDIO_MODE_VORBIS,
+   AUDIO_MODE_FLAC,
+};
+
+u32 decode_mode = AUDIO_MODE_VORBIS;
 
 bool is_dir(u32 s) {
    if (s == 0) return true;
@@ -132,15 +141,70 @@ void cd(){
      perror ("");
    }
 }
+u32 audiobuf_index = 0;
+FLAC__StreamDecoderWriteStatus FLAC_write_callback(const FLAC__StreamDecoder *decoder, const FLAC__Frame *frame, const FLAC__int32 * const buffer[], void *client_data)
+{
+
+	/* write decoded PCM samples */
+	for(u32 i = 0; i < frame->header.blocksize; i++) {
+		// if(
+		// 	!write_little_endian_int16(f, (FLAC__int16)buffer[0][i]) ||  /* left channel */
+		// 	!write_little_endian_int16(f, (FLAC__int16)buffer[1][i])     /* right channel */
+		// ) {
+		// 	fprintf(stderr, "ERROR: write error\n");
+		// 	return FLAC__STREAM_DECODER_WRITE_STATUS_ABORT;
+		// }
+      audiobuf[audiobuf_index] = (FLAC__int16)buffer[0][i];
+      audiobuf[audiobuf_index + 1] = (FLAC__int16)buffer[1][i];
+      audiobuf_index += 2;
+	}
+
+	return FLAC__STREAM_DECODER_WRITE_STATUS_CONTINUE;
+}
+
+void FLAC_metadata_callback(const FLAC__StreamDecoder *decoder, const FLAC__StreamMetadata *metadata, void *client_data)
+{
+	/* print some stats */
+	// if(metadata->type == FLAC__METADATA_TYPE_STREAMINFO) {
+		/* save for later */
+		// total_samples = metadata->data.stream_info.total_samples;
+		Samples = metadata->data.stream_info.sample_rate;
+      audiobuf_size = Samples * sizeof(s16) * 2;
+      audiobuf = (s16*)linearAlloc(audiobuf_size);
+	// }
+}
+
+void FLAC_error_callback(const FLAC__StreamDecoder *decoder, FLAC__StreamDecoderErrorStatus status, void *client_data)
+{
+	(void)decoder, (void)client_data;
+
+	fprintf(stderr, "Got error callback: %s\n", FLAC__StreamDecoderErrorStatusString[status]);
+}
 
 void play_file_from_filename(const std::string name) {
    currently_playing = std::string(name);
-   v = stb_vorbis_open_filename(name.c_str(), &error, NULL);
-   info = stb_vorbis_get_info(v);
-   Samples = info.sample_rate;
-   audiobuf_size = Samples * sizeof(s16) * 2;
    if (audiobuf) linearFree(audiobuf);
-   audiobuf = (s16*)linearAlloc(audiobuf_size);
+
+   if (name.rfind(".flac") != std::string::npos) {
+      if (!FLAC_decoder) {
+         FLAC_decoder = FLAC__stream_decoder_new();
+         FLAC__stream_decoder_set_md5_checking(FLAC_decoder, true);
+      }
+      audiobuf_index = 0;
+      decode_mode = AUDIO_MODE_FLAC;
+      FLAC__StreamDecoderInitStatus init_status = FLAC__stream_decoder_init_file(FLAC_decoder, name.c_str(), FLAC_write_callback, FLAC_metadata_callback, FLAC_error_callback, NULL);
+      if(init_status != FLAC__STREAM_DECODER_INIT_STATUS_OK) {
+         printf("ERROR: initializing decoder: %s\n", FLAC__StreamDecoderInitStatusString[init_status]);
+      }
+      FLAC__stream_decoder_process_until_end_of_metadata(FLAC_decoder);
+   } else {
+      decode_mode = AUDIO_MODE_VORBIS;
+      v = stb_vorbis_open_filename(name.c_str(), &error, NULL);
+      info = stb_vorbis_get_info(v);
+      Samples = info.sample_rate;
+      audiobuf_size = Samples * sizeof(s16) * 2;
+      audiobuf = (s16*)linearAlloc(audiobuf_size);
+   }
    paused = false;
 }
 
@@ -204,6 +268,9 @@ void print_menu() {
          printf("Battery: %d\n", power_level);
          printf("Charging: ");
          printf(is_charging ? "charging\n" : "not charging\n");
+         printf("Decoding mode: ");
+         printf(decode_mode == AUDIO_MODE_VORBIS ? "OGG Vorbis\n" : "FLAC\n");
+         printf("Sample Rate: %d\n", Samples);
       } else if (state == STATE_FC) {
          filechooser();
       }
@@ -478,13 +545,27 @@ int main()
       if (audiobuf && !paused) {
          if(frames >= 50) {
             frames = 0;
-            int n = stb_vorbis_get_samples_short_interleaved(v, 2, audiobuf, Samples * 2);
+            int n = 0;
+            if (decode_mode == AUDIO_MODE_VORBIS) {
+               n = stb_vorbis_get_samples_short_interleaved(v, 2, audiobuf, Samples * 2);
+            } else {
+               while (audiobuf_index < Samples * 2) {
+                  n = FLAC__stream_decoder_process_single(FLAC_decoder);
+                  if (!n) break;
+               }
+               audiobuf_index = 0;
+            }
 
             if(n == 0) {
-               stb_vorbis_close(v);
+               if (decode_mode == AUDIO_MODE_VORBIS) {
+                  stb_vorbis_close(v);
+               } else {
+                  FLAC__stream_decoder_delete(FLAC_decoder);
+               }
                linearFree(audiobuf);
                audiobuf = NULL;
                v = NULL;
+               FLAC_decoder = NULL;
                if (loop_flag) play_file_from_filename(currently_playing);
             }
 
@@ -502,6 +583,9 @@ int main()
    }
 
    // Exit services
+   if (FLAC_decoder) {
+      FLAC__stream_decoder_delete(FLAC_decoder);
+   }
    csndExit();
    gfxExit();
    ptmExit();

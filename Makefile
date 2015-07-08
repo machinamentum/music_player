@@ -52,7 +52,7 @@ CXXFLAGS	:= $(CFLAGS) -fno-rtti -fno-exceptions -std=c++11
 ASFLAGS	:=	-g $(ARCH)
 LDFLAGS	=	-specs=3dsx.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
 
-LIBS	:= ../../caelina/lib/libcaelina.a -lctru -lm
+LIBS	:= ../../caelina/lib/libcaelina.a -lFLAC -logg -lctru -lm
 
 #---------------------------------------------------------------------------------
 # list of directories containing libraries, this must be the top level containing
@@ -122,6 +122,16 @@ endif
 #---------------------------------------------------------------------------------
 all: $(BUILD)
 
+dist: all
+	mkdir -p music_player
+	cp $(TARGET).3dsx music_player/$(TARGET).3dsx
+	cp $(TARGET).smdh music_player/$(TARGET).smdh
+	$(TOPDIR)/cia.sh
+	cp $(TARGET).cia music_player/$(TARGET).cia
+	cp readme.txt music_player/readme.txt
+	cp LICENSE* music_player/
+	zip -r music_player.zip music_player
+
 run: all
 	cat $(TARGET).3dsx |  socat -t 0 - TCP:$(DEVICE_IP):9000
 
@@ -132,7 +142,7 @@ $(BUILD):
 #---------------------------------------------------------------------------------
 clean:
 	@echo clean ...
-	@rm -fr $(BUILD) $(TARGET).3dsx $(OUTPUT).smdh $(TARGET).elf
+	@rm -fr $(BUILD) $(TARGET).3dsx $(OUTPUT).smdh $(TARGET).elf music_player.cia music_player *.zip
 
 
 #---------------------------------------------------------------------------------
@@ -144,7 +154,7 @@ DEPENDS	:=	$(OFILES:.o=.d)
 # main targets
 #---------------------------------------------------------------------------------
 ifeq ($(strip $(NO_SMDH)),)
-.PHONY: all run
+.PHONY: all run dist
 all	:	$(OUTPUT).3dsx $(OUTPUT).smdh
 endif
 $(OUTPUT).3dsx	:	$(OUTPUT).elf
