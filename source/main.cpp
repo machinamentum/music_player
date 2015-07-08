@@ -455,6 +455,8 @@ int main()
    consoleInit(GFX_TOP, NULL);
    csndInit();
 
+   chdir("/");
+
    device = gfxCreateDevice(240, 320);
    gfxMakeCurrent(device);
 

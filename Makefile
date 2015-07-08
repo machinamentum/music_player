@@ -130,6 +130,7 @@ dist: all
 	cp $(TARGET).cia music_player/$(TARGET).cia
 	cp readme.txt music_player/readme.txt
 	cp LICENSE* music_player/
+	cp random0.ogg music_player/random0.ogg
 	zip -r music_player.zip music_player
 
 run: all
