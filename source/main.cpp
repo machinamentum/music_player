@@ -459,7 +459,7 @@ int main()
    // fsInit();
    // sdmcInit();
 
-   // chdir("/");
+   chdir("sdmc:/");
 
    void *device = gfxCreateDevice(240, 320, false);
    gfxMakeCurrent(device);
