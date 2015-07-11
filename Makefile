@@ -134,7 +134,7 @@ dist: all
 	zip -r music_player.zip music_player
 
 run: all
-	cat $(TARGET).3dsx |  socat -t 0 - TCP:$(DEVICE_IP):9000
+	3dslink $(TARGET).3dsx
 
 $(BUILD):
 	@[ -d $@ ] || mkdir -p $@

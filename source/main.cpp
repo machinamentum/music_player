@@ -11,7 +11,7 @@
 #include <unistd.h>
 #include <thread>
 
-#include "gl.h"
+#include <GL/gl.h>
 #include "gfx_device.h"
 
 #include "stb_image.h"
@@ -363,6 +363,8 @@ extern void glFrustumf (GLfloat left, GLfloat right, GLfloat bottom, GLfloat top
 }
 
 void draw_unit_square() {
+   glPushMatrix();
+   glTranslatef(0.0, 0.0, -0.5);
    glBegin(GL_TRIANGLES);
       glTexCoord2f(0.0f, 0.0f);
       glVertex3f(0.0f, 0.0f, 0.0f);
@@ -382,6 +384,7 @@ void draw_unit_square() {
       glTexCoord2f(1.0f, 0.0f);
       glVertex3f(1.0f, 0.0f, 0.0f);
    glEnd();
+   glPopMatrix();
 }
 
 void *device = NULL;
@@ -414,13 +417,14 @@ void render() {
    glClearColor(223.0f/256.0f, 193.0f/256.0f, 42.0f/256.0f, 1.0f);
    glClear(GL_COLOR_BUFFER_BIT);
    glEnable(GL_BLEND);
+   glEnable(GL_TEXTURE_2D);
    glMatrixMode(GL_MODELVIEW);
    glLoadIdentity();
    glScalef(1.0f/320.0f, 1.0/240.0f, 1.0f);
    glTranslatef(320.0f / 2.0f - 32.0f, 240.0f / 2.0f - 32.0f, 0.0f);
    glScalef(64.0f, 64.0f, 1.0f);
 
-   glEnable(GL_TEXTURE_2D);
+
    glBindTexture(GL_TEXTURE_2D, (paused ? play_button : pause_button));
    draw_unit_square();
 
@@ -429,7 +433,6 @@ void render() {
    glTranslatef(320.0f / 2.0f - 32.0f - 96.0f, 240.0f / 2.0f - 32.0f, 0.0f);
    glScalef(64.0f, 64.0f, 1.0f);
 
-   glEnable(GL_TEXTURE_2D);
    glBindTexture(GL_TEXTURE_2D, (loop_flag ? loop_button : loop_disable_button));
    draw_unit_square();
 
@@ -438,7 +441,6 @@ void render() {
    glTranslatef(320.0f - 64.0f, -16.0f, 0.0f);
    glScalef(64.0f, 64.0f, 1.0f);
 
-   glEnable(GL_TEXTURE_2D);
    glBindTexture(GL_TEXTURE_2D, power_icon);
    draw_unit_square();
    render_power();
@@ -454,10 +456,12 @@ int main()
    gfxInitDefault();
    consoleInit(GFX_TOP, NULL);
    csndInit();
+   // fsInit();
+   // sdmcInit();
 
-   chdir("/");
+   // chdir("/");
 
-   device = gfxCreateDevice(240, 320);
+   void *device = gfxCreateDevice(240, 320, false);
    gfxMakeCurrent(device);
 
    glMatrixMode(GL_PROJECTION);
@@ -535,7 +539,7 @@ int main()
       }
 
       u8* fb = gfxGetFramebuffer(GFX_BOTTOM, GFX_LEFT, NULL, NULL);
-      if (draw_ui) render();
+      render();
       gfxFlush(fb);
       // Your code goes here
 
@@ -581,7 +585,7 @@ int main()
       }
 
       gfxFlushBuffers();
-      gfxSwapBuffers();
+      gfxSwapBuffersGpu();
    }
 
    // Exit services
