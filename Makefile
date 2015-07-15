@@ -41,7 +41,7 @@ APP_DESCRIPTION	:=
 #---------------------------------------------------------------------------------
 ARCH	:=	-march=armv6k -mtune=mpcore -mfloat-abi=hard
 
-CFLAGS	:=	-g -Wall -O2 -mword-relocations \
+CFLAGS	:= -Wall -O2 -mword-relocations \
 			-fomit-frame-pointer -ffast-math \
 			$(ARCH)
 
@@ -177,6 +177,11 @@ $(OUTPUT).elf	:	$(OFILES)
 # WARNING: This is not the right way to do this! TODO: Do it right!
 #---------------------------------------------------------------------------------
 %.png.o	:	%.png
+#---------------------------------------------------------------------------------
+	@echo $(notdir $<)
+	@$(bin2o)
+
+%.ttf.o	:	%.ttf
 #---------------------------------------------------------------------------------
 	@echo $(notdir $<)
 	@$(bin2o)

@@ -6,6 +6,7 @@
 #include <cstring>
 #include <dirent.h>
 #include <string>
+#include <sstream>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -20,6 +21,12 @@
 #include "loop_png.h"
 #include "loop_disable_png.h"
 #include "power_png.h"
+
+#include "MB_Gothic_Spell_ttf.h"
+#include "Anita_ttf.h"
+
+#define STB_TRUETYPE_IMPLEMENTATION
+#include "stb_truetype.h"
 
 #include <FLAC/stream_decoder.h>
 
@@ -45,6 +52,7 @@ bool loop_flag = false;
 bool paused = false;
 u8 power_level = 5;
 u8 is_charging = 0;
+float translate = 0.0;
 
 std::string currently_playing;
 
@@ -63,6 +71,7 @@ bool is_dir(u32 s) {
 
       u32 cur = 1;
       while ((ent = readdir (dir)) != NULL) {
+         if (strncmp(ent->d_name, ".", 1) == 0) continue;
          if (cur == s) {
             struct stat st;
             std::string name = cur_dir + "/" + ent->d_name;
@@ -83,36 +92,69 @@ bool is_dir(u32 s) {
    return false;
 }
 
-void filechooser() {
-   DIR *dir;
-   struct dirent *ent;
-   if ((dir = opendir (cur_dir.c_str())) != NULL) {
-     /* print all the files and directories within directory */
+void print(float x, float y, const std::string str);
 
-      u32 cur = 0;
-      if (cur == cursor_pos) {
-         printf("\e[7m");
-      }
-      printf ("..\n");
-      if (cur == cursor_pos) {
-         printf("\e[0m");
-      }
-      ++cur;
-      while ((ent = readdir (dir)) != NULL) {
-         if (cur == cursor_pos) {
-            printf("\e[7m");
-         }
-         printf ("%s\n", ent->d_name);
-         if (cur == cursor_pos) {
-            printf("\e[0m");
-         }
-         cur++;
-      }
-      closedir (dir);
-   } else {
-     /* could not open directory */
-     perror ("");
+GLuint fc_list = 0;
+
+void filechooser() {
+   if (fc_list == 0) {
+      fc_list = glGenLists(1);
    }
+   float bias = (float)(cursor_pos * 10);
+   if (bias + translate >= 220) {
+      translate -= (bias + translate) - 220.0;
+   }
+
+   if (bias + translate < 10) {
+      translate += 10.0;
+   }
+
+   glLoadIdentity();
+   glScalef(1.0/400.0, 1.0/240.0, 1.0);
+   glTranslatef(0, translate, 0);
+
+   if (draw_ui) {
+      glNewList(fc_list, GL_COMPILE_AND_EXECUTE);
+      DIR *dir;
+      struct dirent *ent;
+      if ((dir = opendir (cur_dir.c_str())) != NULL) {
+        /* print all the files and directories within directory */
+         float ycoord = 10.0;
+         u32 cur = 0;
+         if (cur == cursor_pos) {
+            glColor4f(0.1, 1, 1, 1.0);
+         }
+         print (0, ycoord, "..\n");
+         if (cur == cursor_pos) {
+            glColor4f(1, 1, 1, 1);
+         }
+         ++cur;
+
+
+         while ((ent = readdir (dir)) != NULL) {
+            if (strncmp(ent->d_name, ".", 1) == 0) continue;
+            if (cur == cursor_pos) {
+               glColor4f(0.1, 1, 1, 1.0);
+            }
+            ycoord += 10.0;
+            print (0, ycoord, ent->d_name);
+            if (cur == cursor_pos) {
+               glColor4f(1, 1, 1, 1);
+            }
+            cur++;
+
+         }
+         closedir (dir);
+      } else {
+        /* could not open directory */
+        perror ("");
+      }
+      glEndList();
+      draw_ui = false;
+   } else {
+      glCallList(fc_list);
+   }
+
 }
 
 void cd(){
@@ -128,6 +170,7 @@ void cd(){
 
       u32 cur = 1;
       while ((ent = readdir (dir)) != NULL) {
+         if (strncmp(ent->d_name, ".", 1) == 0) continue;
          if (cur == cursor_pos) {
             cur_dir = cur_dir + "/" + ent->d_name;
             closedir (dir);
@@ -215,6 +258,7 @@ void play_file() {
 
       u32 cur = 1;
       while ((ent = readdir (dir)) != NULL) {
+         if (strncmp(ent->d_name, ".", 1) == 0) continue;
          if (cur == cursor_pos) {
             if (v) {
                stb_vorbis_close(v);
@@ -243,34 +287,36 @@ void pick() {
    }
 }
 
+void draw_string_goth(float x, float y, const std::string str);
+
+std::string to_string(int number)
+{
+   std::stringstream ss;//create a stringstream
+   ss << number;//add number to the stream
+   return ss.str();//return a string with the contents of the stream
+}
+
 void print_menu() {
-   if (draw_ui) {
-      consoleClear();
-      draw_ui = false;
+   if (true) {
+      // consoleClear();
+      glClear(GL_COLOR_BUFFER_BIT);
+      glColor4f(1, 1, 1, 1);
       if (state == STATE_IDLE) {
-         printf("\x1b[0;0H");
-         printf("OGG player by machinamentum\n");
-         printf("\x1b[3;0H");
-         printf("File controls:\n");
-         printf("X = Switch to/from file chooser\n");
-         printf("A = Choose file\n");
-         printf("\x1b[7;0H");
-         printf("Player controls/info:\n");
+         print(0, 10, "OGG player by machinamentum\n");
+         print(0, 30, "File controls:\n");
+         print(0, 40, "X = Switch to/from file chooser\n");
+         print(0, 50, "A = Choose file\n");
+
+         print(0, 70, "Player controls/info:");
          if (audiobuf) {
-            printf("\x1b[8;0H");
-            printf("Currently playing: %s\n", currently_playing.c_str());
+            print(0, 80, "Currently playing: " + currently_playing);
          }
-         printf("\x1b[9;0H");
-         printf("Loop (Toggle DPAD-UP): ");
-         printf(loop_flag ? "loop song\n" : "off\n");
-         printf("Play/Pause(Toggle A): ");
-         printf(paused ? "Paused\n" : "Playing\n");
-         printf("Battery: %d\n", power_level);
-         printf("Charging: ");
-         printf(is_charging ? "charging\n" : "not charging\n");
-         printf("Decoding mode: ");
-         printf(decode_mode == AUDIO_MODE_VORBIS ? "OGG Vorbis\n" : "FLAC\n");
-         printf("Sample Rate: %d\n", Samples);
+         print(0, 90, std::string("Loop [Toggle DPAD-UP]: ") + (loop_flag ? "loop song\n" : "off\n"));
+         print(0, 100, std::string("Play/Pause [Toggle A]: ") + (paused ? "Paused\n" : "Playing\n"));
+         print(0, 110, "Battery: " + to_string(power_level));
+         print(0, 120, std::string("Charging: ") + (is_charging ? "charging\n" : "not charging\n"));
+         print(0, 130, std::string("Decoding mode: ") + (decode_mode == AUDIO_MODE_VORBIS ? "OGG Vorbis\n" : "FLAC\n"));
+         print(0, 140, "Sample Rate: " + to_string(Samples));
       } else if (state == STATE_FC) {
          filechooser();
       }
@@ -394,10 +440,81 @@ GLuint loop_button;
 GLuint loop_disable_button;
 GLuint power_icon;
 
+unsigned char temp_bitmap[512*512];
+
+stbtt_bakedchar cdata_goth[96]; // ASCII 32..126 is 95 glyphs
+GLuint goth_tex;
+
+stbtt_bakedchar cdata_console[96]; // ASCII 32..126 is 95 glyphs
+GLuint console_tex;
+
+void initfont_goth(void)
+{
+	// fread(ttf_buffer, 1, 1<<20, fopen("sdmc:/3ds/selena/assets/aladdin.ttf", "rb"));
+	stbtt_BakeFontBitmap((unsigned char*)MB_Gothic_Spell_ttf,0, 20.0, temp_bitmap,512,512, 32,96, cdata_goth); // no guarantee this fits!
+	// can free ttf_buffer at this point
+	glGenTextures(1, &goth_tex);
+	glBindTexture(GL_TEXTURE_2D, goth_tex);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_ALPHA, 512,512, 0, GL_ALPHA, GL_UNSIGNED_BYTE, temp_bitmap);
+	// can free temp_bitmap at this point
+}
+
+void initfont_anita(void)
+{
+	// fread(ttf_buffer, 1, 1<<20, fopen("sdmc:/3ds/selena/assets/aladdin.ttf", "rb"));
+	stbtt_BakeFontBitmap((unsigned char*)Anita_ttf,0, 12.0, temp_bitmap,512,512, 32,96, cdata_console); // no guarantee this fits!
+	// can free ttf_buffer at this point
+	glGenTextures(1, &console_tex);
+	glBindTexture(GL_TEXTURE_2D, console_tex);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_ALPHA, 512,512, 0, GL_ALPHA, GL_UNSIGNED_BYTE, temp_bitmap);
+	// can free temp_bitmap at this point
+}
+
+void print(float x, float y, const std::string str)
+{
+	// assume orthographic projection with units = screen pixels, origin at top left
+	glBindTexture(GL_TEXTURE_2D, console_tex);
+	glBegin(GL_QUADS);
+   const char *text = str.c_str();
+	while (*text) {
+			if (*text >= 32 && (unsigned char)(*text) < 128) {
+				stbtt_aligned_quad q;
+				stbtt_GetBakedQuad(cdata_console, 512,512, *text-32, &x,&y,&q,1);//1=opengl & d3d10+,0=d3d9
+				glTexCoord2f(q.s0,q.t0); glVertex2f(q.x0,q.y0);
+				glTexCoord2f(q.s1,q.t0); glVertex2f(q.x1,q.y0);
+				glTexCoord2f(q.s1,q.t1); glVertex2f(q.x1,q.y1);
+				glTexCoord2f(q.s0,q.t1); glVertex2f(q.x0,q.y1);
+			}
+			++text;
+	}
+	glEnd();
+}
+
+void draw_string_goth(float x, float y, const std::string str)
+{
+	// assume orthographic projection with units = screen pixels, origin at top left
+	glBindTexture(GL_TEXTURE_2D, goth_tex);
+	glBegin(GL_QUADS);
+   const char *text = str.c_str();
+	while (*text) {
+			if (*text >= 32 && (unsigned char)(*text) < 128) {
+				stbtt_aligned_quad q;
+				stbtt_GetBakedQuad(cdata_goth, 512,512, *text-32, &x,&y,&q,1);//1=opengl & d3d10+,0=d3d9
+				glTexCoord2f(q.s0,q.t0); glVertex2f(q.x0,q.y0);
+				glTexCoord2f(q.s1,q.t0); glVertex2f(q.x1,q.y0);
+				glTexCoord2f(q.s1,q.t1); glVertex2f(q.x1,q.y1);
+				glTexCoord2f(q.s0,q.t1); glVertex2f(q.x0,q.y1);
+			}
+			++text;
+	}
+	glEnd();
+}
+
+
 void render_power() {
    glLoadIdentity();
    glScalef(1.0f/320.0f, 1.0/240.0f, 1.0f);
-   glTranslatef(320.0f - 64.0f + 16.0f, 8.0f, 0.0f);
+   glTranslatef(320.0f - 65.0f + 16.0f, 8.0f, 0.0f);
    glScalef((32.0f / 5.0f) * ((float)power_level), 16.0f, 1.0f);
    glDisable(GL_TEXTURE_2D);
    if (power_level <= 2) {
@@ -414,7 +531,8 @@ void render_power() {
 }
 
 void render() {
-   glClearColor(223.0f/256.0f, 193.0f/256.0f, 42.0f/256.0f, 1.0f);
+   // glClearColor(223.0f/256.0f, 193.0f/256.0f, 42.0f/256.0f, 1.0f);
+   glClearColor(0,0,0,1);
    glClear(GL_COLOR_BUFFER_BIT);
    glEnable(GL_BLEND);
    glEnable(GL_TEXTURE_2D);
@@ -444,6 +562,8 @@ void render() {
    glBindTexture(GL_TEXTURE_2D, power_icon);
    draw_unit_square();
    render_power();
+
+
 }
 
 int main()
@@ -454,14 +574,14 @@ int main()
    hidInit(NULL);
    ptmInit();
    gfxInitDefault();
-   consoleInit(GFX_TOP, NULL);
+   // consoleInit(GFX_TOP, NULL);
    csndInit();
    // fsInit();
    // sdmcInit();
 
    chdir("sdmc:/");
 
-   void *device = gfxCreateDevice(240, 320, false);
+   void *device = gfxCreateDevice(240, 320);
    gfxMakeCurrent(device);
 
    glMatrixMode(GL_PROJECTION);
@@ -511,33 +631,53 @@ int main()
 
    glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
+   void *top_device = gfxCreateDevice(240, 400);
+   gfxMakeCurrent(top_device);
+   initfont_goth();
+   initfont_anita();
+   glMatrixMode(GL_PROJECTION);
+   glLoadIdentity();
+   glOrtho(0.0, 1.0, 1.0, 0.0, -1.0, 1.0);
+
+   glTranslatef(0.5f, 0.5f, 0.0f);
+   glRotatef(90.0f, 0.0f, 0.0f, 1.0f);
+   glTranslatef(-0.5f, -0.5f, 0.0f);
+
+   glMatrixMode(GL_MODELVIEW);
+   glLoadIdentity();
+   glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+   glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+   glEnable(GL_BLEND);
+   glEnable(GL_TEXTURE_2D);
+
    int frames = 0;
    int channel = 0x8;
 
-   {
-      u8* fb = gfxGetFramebuffer(GFX_BOTTOM, GFX_LEFT, NULL, NULL);
-      render();
-      gfxFlush(fb);
-   }
 
    while (aptMainLoop())
    {
       gspWaitForVBlank();
       hidScanInput();
+      gfxMakeCurrent(top_device);
+      glClear(GL_COLOR_BUFFER_BIT);
+      glLoadIdentity();
+      glScalef(1.0/400.0, 1.0/240.0, 1.0);
       state_man();
+      gfxFlush(gfxGetFramebuffer(GFX_TOP, GFX_LEFT, NULL, NULL));
       u8 plevel;
       u8 charge;
       PTMU_GetBatteryLevel(NULL, &plevel);
       PTMU_GetBatteryChargeState(NULL, &charge);
       if (plevel != power_level) {
          power_level = plevel;
-         draw_ui = true;
+         // draw_ui = true;
       }
       if (charge != is_charging) {
          is_charging = charge;
-         draw_ui = true;
+         //draw_ui = true;
       }
 
+      gfxMakeCurrent(device);
       u8* fb = gfxGetFramebuffer(GFX_BOTTOM, GFX_LEFT, NULL, NULL);
       render();
       gfxFlush(fb);
